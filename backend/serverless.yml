@@ -25,6 +25,7 @@ provider:
     TODOS_TABLE: todos-${self:provider.stage}
     TODOS_BUCKET: serverless-todo-sorkin-${self:provider.stage}
     SIGNED_URL_EXPIRATION: 300
+    CONNECTIONS_TABLE: Connections-chat-${self:provider.stage}
 
   iamRoleStatements:
     - Effect: Allow
@@ -36,6 +37,12 @@ provider:
         - dynamodb:DeleteItem
         - dynamodb:UpdateItem
       Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TODOS_TABLE}
+    - Effect: Allow
+      Action:
+        - dynamodb:Scan
+        - dynamodb:PutItem
+        - dynamodb:DeleteItem
+      Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.CONNECTIONS_TABLE}
 functions:
   Auth:
     handler: src/lambda/auth/auth0Authorizer.handler
@@ -57,6 +64,23 @@ functions:
 
   # TODO: Configure this function
 
+  ConnectionHandler:
+    handler: src/lambda/websocket/connect.handler
+    events:
+      - websocket:
+          route: $connect
+
+  DisconnectHandler:
+    handler: src/lambda/websocket/disconnect.handler
+    events:
+      - websocket:
+          route: $disconnect
+
+  OnMessage:
+    handler: src/lambda/websocket/onMessage.handler
+    events:
+      - websocket:
+          route: onMessage
   CreateTodo:
     handler: src/lambda/http/createTodo.handler
     events:
@@ -152,6 +176,20 @@ resources:
         ValidateRequestBody: true
         ValidateRequestParameters: false
     # TODO: Add any necessary AWS resources
+    
+    WebSocketConnectionsDynamoDBTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:provider.environment.CONNECTIONS_TABLE}
+
+
     TodosTable:
       Type: AWS::DynamoDB::Table
       Properties:
